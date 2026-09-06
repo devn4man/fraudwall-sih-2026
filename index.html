@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FraudWall | SIH 2026 Intelligence Prototype</title>
+  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leader-line/1.0.7/leader-line.min.js"></script>
+  <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
+  <style>
+    :root {
+      --red: #ff3158;
+      --orange: #ff8b42;
+      --yellow: #ffe45d;
+      --blue: #39d9ff;
+      --ink: #d8f5f0;
+      --muted: #87a8ad;
+      --glass: rgba(8, 15, 23, .68);
+      --topbar-height: 84px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: #d8f5f0;
+      background: #0a0b10;
+      font-family: 'Courier New', monospace;
+    }
+
+    body > .leader-line { pointer-events: none; z-index: 10; }
+    body > .leader-line path { pointer-events: stroke; cursor: pointer; }
+
+    #matrixCanvas {
+      position: fixed;
+      z-index: -1;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      opacity: .05;
+    }
+
+    button, input { font: inherit; }
+
+    #topNav {
+      position: fixed;
+      z-index: 30;
+      top: 0;
+      right: 0;
+      left: 0;
+      min-height: var(--topbar-height);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 14px 26px;
+      border-bottom: 1px solid rgba(255,255,255,.12);
+      background: rgba(5, 8, 15, .9);
+      box-shadow: 0 10px 26px rgba(0,0,0,.35);
+      backdrop-filter: blur(12px);
+    }
+
+    .eyebrow {
+      margin: 0 0 3px;
+      color: var(--red);
+      font: 10px/1.2 'Courier New', monospace;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      color: #d8f5f0;
+      font-size: clamp(21px, 3vw, 31px);
+      font-weight: bold;
+      letter-spacing: .02em;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font: 10px/1.2 'Courier New', monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .tether-button {
+      min-height: 34px;
+      padding: 0 13px;
+      border: 1px solid rgba(0, 255, 255, .7);
+      color: #00ffff;
+      background: rgba(0, 255, 255, .07);
+      cursor: pointer;
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .tether-button:hover, .tether-button.is-active {
+      color: #041114;
+      background: #00ffff;
+      box-shadow: 0 0 18px rgba(0,255,255,.55);
+    }
+
+    .save-button {
+      min-height: 34px;
+      padding: 0 13px;
+      border: 1px solid rgba(110, 255, 153, .55);
+      color: #8dffb0;
+      background: rgba(110, 255, 153, .06);
+      cursor: pointer;
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .save-button:hover { background: rgba(110, 255, 153, .15); }
+
+    .ingest-button, .briefing-button {
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid;
+      background: rgba(0,0,0,.18);
+      cursor: pointer;
+      font-size: 10px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .ingest-button { border-color: #51ffb0; color: #51ffb0; }
+    .briefing-button { border-color: #ffd34d; color: #ffd34d; }
+    .ingest-button:hover { background: rgba(81,255,176,.14); box-shadow: 0 0 16px rgba(81,255,176,.35); }
+    .briefing-button:hover { background: rgba(255,211,77,.14); box-shadow: 0 0 16px rgba(255,211,77,.3); }
+
+    #aiTicker {
+      position: fixed;
+      z-index: 29;
+      top: var(--topbar-height);
+      right: 0;
+      left: 0;
+      height: 28px;
+      overflow: hidden;
+      padding: 7px 20px;
+      border-bottom: 1px solid rgba(57,217,255,.25);
+      color: #62f6c1;
+      background: rgba(2, 12, 17, .92);
+      font: 10px/1 'Courier New', monospace;
+      letter-spacing: .05em;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    #boardContainer { inset: calc(var(--topbar-height) + 28px) 0 0; height: calc(100vh - var(--topbar-height) - 28px); }
+
+    .modal-backdrop {
+      position: fixed;
+      z-index: 70;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(0,0,0,.68);
+      backdrop-filter: blur(5px);
+    }
+
+    .modal-backdrop.is-open { display: grid; }
+
+    .ingest-modal {
+      width: min(620px, calc(100vw - 30px));
+      padding: 24px;
+      border: 1px solid rgba(81,255,176,.5);
+      background: rgba(8, 16, 24, .94);
+      box-shadow: 0 0 40px rgba(0,255,190,.18), 0 20px 80px rgba(0,0,0,.65);
+      backdrop-filter: blur(18px);
+    }
+
+    .modal-kicker { margin: 0 0 6px; color: #51ffb0; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; }
+    .ingest-modal h2 { margin: 0 0 18px; color: #e5fff5; font-size: 22px; }
+    .source-list { display: grid; gap: 8px; margin-bottom: 18px; }
+    .source-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid rgba(255,255,255,.12); color: #c0d4d1; background: rgba(255,255,255,.035); font-size: 11px; }
+    .source-row input { accent-color: #51ffb0; }
+    .source-status { color: #51ffb0; font-size: 10px; }
+    #ingestTerminal { min-height: 128px; max-height: 190px; overflow: auto; margin-bottom: 17px; padding: 12px; border: 1px solid rgba(57,217,255,.2); color: #7df7d0; background: #020608; font: 11px/1.65 'Courier New', monospace; white-space: pre-wrap; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .execute-button, .close-modal { padding: 10px 14px; border: 1px solid; cursor: pointer; font: 10px 'Courier New', monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .execute-button { border-color: #51ffb0; color: #06130d; background: #51ffb0; }
+    .close-modal { border-color: rgba(255,255,255,.25); color: #b4c2c4; background: transparent; }
+
+    .collapse-counter { color: #e7d8c3; white-space: nowrap; }
+    .collapse-counter strong { color: var(--red); font-weight: normal; }
+
+    .noise-toggle {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid rgba(231,189,50,.55);
+      color: #e8dcae;
+      background: rgba(231,189,50,.08);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .noise-toggle input {
+      width: 15px;
+      height: 15px;
+      margin: 0;
+      accent-color: var(--yellow);
+      cursor: pointer;
+    }
+
+    #boardContainer {
+      position: fixed;
+      inset: var(--topbar-height) 0 0;
+      width: 100vw;
+      height: calc(100vh - var(--topbar-height));
+      overflow: hidden;
+      background: radial-gradient(ellipse at center, rgba(19, 35, 47, .72), rgba(5, 9, 20, .84) 62%, rgba(0, 0, 0, .94) 100%);
+      isolation: isolate;
+    }
+
+    #zoomableCanvas {
+      position: relative;
+      width: 3000px;
+      height: 3000px;
+      transform-origin: 0 0;
+      background-image: linear-gradient(rgba(39,143,170,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(39,143,170,.1) 1px, transparent 1px);
+      background-size: 58px 58px;
+    }
+
+    #boardContainer::before {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      content: '';
+      opacity: .18;
+      background: radial-gradient(ellipse at center, transparent 18%, rgba(0,0,0,.42) 65%, #000 100%);
+      mix-blend-mode: screen;
+    }
+
+    #boardContainer::after {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      content: 'A7F0 19C2 0B4E 77D1 5EAA 2F90 8CC4 13D8 4B6F 90AE 00D3 7A1C 6B82 2E4F 11C0 8D7A 39B2 0F6E 5AA1 24D9 7C03 4E88 1BFA 63D0 0AA7 96CE 31B4 5D82 0E19 78F2';
+      padding: 13px 3vw;
+      overflow: hidden;
+      color: rgba(57, 217, 255, .035);
+      font: 10px/2.7 'Courier New', monospace;
+      letter-spacing: .42em;
+      white-space: pre-wrap;
+      word-spacing: 1.6em;
+      background: radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,.25) 57%, #010101 100%);
+      background-size: 100% 100%;
+      animation: codeScroll 15s linear infinite;
+    }
+
+    @keyframes dataRain {
+      from { transform: translateY(-54px); }
+      to { transform: translateY(54px); }
+    }
+
+    @keyframes tacticalGrid {
+      from { background-position: 0 0, 0 0, 0 0; }
+      to { background-position: 58px 58px, 58px 58px, 0 0; }
+    }
+
+    @keyframes codeScroll {
+      from { transform: translateY(-22px); }
+      to { transform: translateY(22px); }
+    }
+
+    @keyframes bootUp {
+      0% { opacity: 0; filter: brightness(2.2) saturate(.4); transform: translate(0, 0) scale(.72) skewX(8deg); }
+      45% { opacity: .8; filter: brightness(1.7) saturate(.7); transform: translate(3px, -1px) scale(1.04) skewX(-4deg); }
+      72% { transform: translate(-2px, 1px) scale(.98) skewX(2deg); }
+      100% { opacity: 1; filter: none; transform: translate(0, 0) scale(1); }
+    }
+
+    .suspect-card {
+      position: absolute;
+      z-index: 1000;
+      width: 120px;
+      padding-bottom: 8px;
+      color: var(--ink);
+      cursor: grab;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      background: rgba(10, 15, 30, 0.95);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 0 12px rgba(57, 217, 255, .28), 0 12px 24px rgba(0,0,0,.6);
+      transform: translate(0, 0);
+      backdrop-filter: blur(10px);
+      animation: bootUp .46s steps(2, end) both;
+      transition: opacity .3s ease, filter .3s ease, box-shadow .15s ease, border-color .15s ease;
+      touch-action: none;
+    }
+
+    .suspect-card:hover, .suspect-card.is-dragging {
+      z-index: 100;
+      box-shadow: 0 0 20px rgba(57, 217, 255, .7), 0 10px 22px rgba(0,0,0,.72);
+    }
+
+    .suspect-card.is-dragging { cursor: grabbing; }
+    .suspect-card.tether-selected { outline: 2px solid #00ffff; box-shadow: 0 0 22px rgba(0,255,255,.9); }
+    .suspect-card.is-arrested { opacity: 0; filter: grayscale(1); transform: scale(.82); }
+    .role-kingpin { border: 2px solid #ff003c; animation: pulse-red 2s infinite; }
+    .role-lieutenant { border: 2px solid #ff7700; animation: pulse-orange 2s infinite; }
+    .role-money-mule { border: 2px solid #ffd000; animation: pulse-yellow 2s infinite; }
+    .role-civilian { border-color: #4c7f86; }
+
+    @keyframes pulse-red { 0% { box-shadow: 0 0 10px #ff003c; } 50% { box-shadow: 0 0 35px #ff003c; } 100% { box-shadow: 0 0 10px #ff003c; } }
+    @keyframes pulse-orange { 0% { box-shadow: 0 0 10px #ff7700; } 50% { box-shadow: 0 0 25px #ff7700; } 100% { box-shadow: 0 0 10px #ff7700; } }
+    @keyframes pulse-yellow { 0% { box-shadow: 0 0 5px #ffd000; } 50% { box-shadow: 0 0 15px #ffd000; } 100% { box-shadow: 0 0 5px #ffd000; } }
+
+    .pushpin {
+      position: absolute;
+      top: -9px;
+      left: 50%;
+      width: 17px;
+      height: 17px;
+      border: 1px solid #6e7371;
+      border-radius: 50%;
+      background: radial-gradient(circle at 33% 25%, #fafcf8 0 10%, #b3b8b5 24%, #626766 66%, #262a29 100%);
+      box-shadow: 1px 2px 3px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.28);
+      transform: translateX(-50%);
+    }
+
+    .high-value {
+      position: absolute;
+      top: -29px;
+      left: 50%;
+      padding: 3px 5px;
+      color: #ffb0a9;
+      border: 1px solid rgba(211,47,47,.75);
+      background: #351416;
+      font: 8px/1 'Courier New', monospace;
+      letter-spacing: .08em;
+      white-space: nowrap;
+      transform: translateX(-50%);
+    }
+
+    .initials {
+      display: grid;
+      height: 52px;
+      place-items: center;
+      margin-bottom: 7px;
+      border: 1px solid rgba(30,30,30,.2);
+      background: linear-gradient(145deg, #d9d5ca, #bdb9ae);
+      color: rgba(22,22,22,.48);
+      font: bold 21px 'Courier New', monospace;
+    }
+
+    .suspect-photo {
+      display: block;
+      width: 100%;
+      height: 52px;
+      margin-bottom: 7px;
+      border: 1px solid rgba(30,30,30,.3);
+      object-fit: cover;
+      filter: grayscale(100%) contrast(120%);
+      transition: filter .25s ease;
+    }
+
+    .suspect-card:hover .suspect-photo { filter: grayscale(0%) contrast(110%); }
+
+    .biometric-silhouette {
+      position: relative;
+      display: grid;
+      height: 52px;
+      place-items: center;
+      margin-bottom: 7px;
+      overflow: hidden;
+      border: 1px solid rgba(57, 217, 255, .32);
+      border-radius: 10px;
+      background: radial-gradient(circle at 50% 34%, rgba(57,217,255,.2), transparent 25%), linear-gradient(145deg, #08131c, #101a26);
+    }
+
+    .biometric-silhouette::before {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(57, 217, 255, .72);
+      border-radius: 50%;
+      background: rgba(57, 217, 255, .14);
+      box-shadow: 0 0 10px rgba(57,217,255,.45);
+      content: '';
+      transform: translateY(-9px);
+    }
+
+    .biometric-silhouette::after {
+      position: absolute;
+      bottom: -13px;
+      width: 52px;
+      height: 40px;
+      border: 2px solid rgba(57, 217, 255, .7);
+      border-radius: 50% 50% 0 0;
+      background: rgba(57, 217, 255, .12);
+      box-shadow: 0 0 13px rgba(57,217,255,.38);
+      content: '';
+    }
+
+    .biometric-silhouette span {
+      position: absolute;
+      right: 0;
+      left: 0;
+      height: 1px;
+      background: var(--blue);
+      box-shadow: 0 0 7px var(--blue);
+      content: '';
+      animation: scanline 2.4s ease-in-out infinite;
+    }
+
+    .suspect-photo {
+      display: block;
+      width: 100%;
+      height: 52px;
+      margin-bottom: 7px;
+      border: 1px solid rgba(57, 217, 255, .32);
+      object-fit: cover;
+      filter: grayscale(100%) contrast(120%);
+    }
+
+    .photo-frame {
+      position: relative;
+    }
+
+    @keyframes scanline {
+      0%, 100% { top: 4px; opacity: .35; }
+      50% { top: calc(100% - 4px); opacity: .95; }
+    }
+
+    .node-name {
+      overflow: hidden;
+      margin: 0;
+      font-size: 10px;
+      font-weight: bold;
+      line-height: 1.12;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .role-badge {
+      display: inline-block;
+      max-width: 100%;
+      margin-top: 5px;
+      padding: 3px 4px 2px;
+      overflow: hidden;
+      color: #5d5c55;
+      border: 1px solid rgba(30,30,30,.15);
+      font: 8px/1 'Courier New', monospace;
+      letter-spacing: .07em;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .role-kingpin .role-badge { color: #9a2828; }
+    .role-lieutenant .role-badge { color: #a84b20; }
+    .role-money-mule .role-badge { color: #806300; }
+
+    .drawer-backdrop {
+      position: fixed;
+      z-index: 38;
+      inset: 0;
+      display: none;
+      background: rgba(0,0,0,.3);
+    }
+
+    .drawer-backdrop.is-open { display: block; }
+
+    .dossier {
+      position: fixed;
+      z-index: 40;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(390px, 92vw);
+      padding: 31px 28px;
+      overflow-y: auto;
+      border-left: 1px solid rgba(255,255,255,.16);
+      background: linear-gradient(145deg, rgba(27,29,30,.95), rgba(10,12,13,.97));
+      box-shadow: -15px 0 42px rgba(0,0,0,.42);
+      transform: translateX(102%);
+      transition: transform .28s ease;
+      backdrop-filter: blur(18px);
+    }
+
+    .dossier.is-open { transform: translateX(0); }
+
+    .drawer-close {
+      position: absolute;
+      top: 19px;
+      right: 19px;
+      width: 32px;
+      height: 32px;
+      border: 1px solid rgba(255,255,255,.18);
+      color: #ded8ce;
+      background: transparent;
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .dossier-kicker {
+      margin: 0 0 7px;
+      color: var(--red);
+      font: 10px 'Courier New', monospace;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+    }
+
+    .dossier h2 {
+      margin: 0;
+      color: #f3efe4;
+      font-size: 30px;
+      font-weight: normal;
+      line-height: 1.05;
+    }
+
+    .threat-score {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin: 24px 0 25px;
+      padding: 14px 0;
+      border-top: 1px solid rgba(255,255,255,.12);
+      border-bottom: 1px solid rgba(255,255,255,.12);
+      color: #adaea9;
+      font: 10px 'Courier New', monospace;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .threat-score strong { color: #f06b63; font: bold 30px 'Courier New', monospace; letter-spacing: 0; }
+
+    .upload-button {
+      width: 100%;
+      margin: -10px 0 18px;
+      padding: 10px 12px;
+      border: 1px solid rgba(57, 217, 255, .45);
+      color: var(--blue);
+      background: rgba(57, 217, 255, .06);
+      cursor: pointer;
+      font: 10px 'Courier New', monospace;
+      letter-spacing: .08em;
+      text-align: left;
+    }
+
+    .upload-button:hover { background: rgba(57, 217, 255, .14); }
+
+    .dossier-grid { margin: 0; }
+    .dossier-grid div { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .dossier-grid dt { color: #8f9491; font: 9px 'Courier New', monospace; letter-spacing: .13em; text-transform: uppercase; }
+    .dossier-grid dd { margin: 5px 0 0; overflow-wrap: anywhere; color: #e8e3d9; font: 13px 'Courier New', monospace; }
+
+    .evidence-title {
+      margin: 25px 0 9px;
+      color: var(--blue);
+      font: bold 11px 'Courier New', monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .evidence-list {
+      margin: 0;
+      padding-left: 19px;
+      color: #b8c9c8;
+      font: 11px/1.5 'Courier New', monospace;
+    }
+
+    .arrest-button {
+      width: 100%;
+      margin-top: 28px;
+      padding: 14px 16px;
+      border: 1px solid #f06a61;
+      color: #fff4ee;
+      background: #a71f24;
+      box-shadow: 0 5px 15px rgba(131,18,22,.32);
+      cursor: pointer;
+      font: 11px 'Courier New', monospace;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    .arrest-button:hover { background: #c52b30; }
+    .arrest-button:disabled { cursor: default; opacity: .65; }
+
+    .toast {
+      position: fixed;
+      z-index: 60;
+      right: 22px;
+      bottom: 22px;
+      max-width: min(380px, calc(100vw - 44px));
+      padding: 13px 17px;
+      border-left: 3px solid var(--red);
+      color: #f1e7dd;
+      background: rgba(34, 18, 19, .95);
+      box-shadow: 0 8px 25px rgba(0,0,0,.35);
+      font: 11px/1.4 'Courier New', monospace;
+      transform: translateY(20px);
+      opacity: 0;
+      transition: opacity .2s ease, transform .2s ease;
+    }
+
+    .toast.is-visible { transform: translateY(0); opacity: 1; }
+
+    #intakeView {
+      position: fixed;
+      z-index: 80;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: radial-gradient(circle at 50% 35%, rgba(14, 40, 48, .72), #030712 70%);
+    }
+
+    #intakeView.is-hidden { display: none; }
+
+    .intake-shell {
+      width: min(760px, 100%);
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+      padding: clamp(24px, 5vw, 52px);
+      border: 1px solid rgba(57, 217, 255, .35);
+      background: rgba(5, 12, 22, .82);
+      box-shadow: 0 0 70px rgba(0, 255, 210, .12), 0 24px 90px rgba(0,0,0,.7);
+      backdrop-filter: blur(18px);
+    }
+
+    .intake-kicker { margin: 0 0 10px; color: #51ffb0; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; }
+    .intake-shell h2 { margin: 0; color: #eafff7; font-size: clamp(24px, 4vw, 42px); line-height: 1.05; }
+    .intake-copy { max-width: 650px; margin: 16px 0 26px; color: #a9c1c5; font: 12px/1.65 'Courier New', monospace; }
+    .intake-sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 26px; }
+    .intake-source { display: grid; gap: 7px; min-height: 76px; padding: 13px; border: 1px solid rgba(255,255,255,.13); color: #d5e5e2; background: rgba(255,255,255,.035); font: 10px/1.4 'Courier New', monospace; }
+    .intake-source strong { color: #60f4c0; font-size: 11px; }
+    .intake-source span { color: #839a9d; }
+    .intake-source input { accent-color: #51ffb0; }
+    #initializeFusion { width: 100%; padding: 15px 18px; border: 1px solid #51ffb0; color: #02120b; background: #51ffb0; box-shadow: 0 0 22px rgba(81,255,176,.22); cursor: pointer; font: bold 11px 'Courier New', monospace; letter-spacing: .12em; }
+    #initializeFusion:hover { background: #85ffc6; }
+    #fusionTerminal { display: none; min-height: 250px; padding: 16px; border: 1px solid rgba(0,255,102,.25); color: #00ff66; background: #010605; font: 12px/1.7 monospace; white-space: pre-wrap; }
+    #fusionTerminal.is-active { display: block; }
+    .fusion-progress { height: 8px; margin-top: 17px; overflow: hidden; border: 1px solid rgba(0,255,102,.3); background: #03120a; }
+    .fusion-progress span { display: block; width: 0; height: 100%; background: #00ff66; box-shadow: 0 0 15px #00ff66; transition: width 2.5s linear; }
+    #fusionPercent { margin: 8px 0 0; color: #7dffb2; font: 11px monospace; text-align: right; }
+
+    #dashboardView { display: block; }
+    #dashboardView.is-hidden { display: none; }
+
+    .proof-panel { margin: 23px 0 0; }
+    .proof-panel h3 { margin: 0 0 10px; color: #5fefff; font: bold 11px 'Courier New', monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .proof-item { padding: 6px; margin-bottom: 6px; font-size: 11px; line-height: 1.45; }
+    .proof-cdr { border-left: 3px solid #0ff; background: rgba(0,255,255,.1); }
+    .proof-ledger { border-left: 3px solid #ff003c; background: rgba(255,0,60,.1); }
+
+    .brand-credit { margin: 8px 0 0; color: #7fabb0; font: 10px 'Courier New', monospace; letter-spacing: .06em; }
+    .copyright-banner { position: fixed; right: 0; bottom: 0; left: 0; z-index: 35; padding: 7px 16px; color: #789092; border-top: 1px solid rgba(255,255,255,.1); background: rgba(2,5,9,.9); font: 9px 'Courier New', monospace; letter-spacing: .04em; text-align: center; }
+    #intakeView .copyright-banner { z-index: 81; }
+
+    @media (max-width: 720px) {
+      :root { --topbar-height: 112px; }
+      #topNav { align-items: flex-start; flex-direction: column; padding: 13px 16px; gap: 9px; }
+      .topbar-right { width: 100%; justify-content: space-between; gap: 8px; }
+      .noise-toggle { min-height: 30px; padding: 0 8px; font-size: 9px; }
+      .suspect-card { width: 120px; }
+    }
+
+    @media (max-height: 600px) {
+      .suspect-card { width: 120px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="matrixCanvas" aria-hidden="true"></canvas>
+
+  <section id="intakeView" aria-labelledby="intake-title">
+    <div class="intake-shell">
+      <p class="intake-kicker">[ FRAUDWALL INTELLIGENCE CORE v2.6 ]</p>
+      <h2 id="intake-title">CENTRAL INTELLIGENCE DATA FUSION PORTAL</h2>
+      <p class="intake-copy">Upload all available multi-source intelligence (FIR reports, Call Detail Records, Financial Ledgers, Geolocation logs). Processed securely under zero-knowledge encryption standards.</p>
+      <p class="brand-credit">FraudWall | SIH 2026 Intelligence Prototype<br>Lead Architect: Naman Singh Baghel</p>
+      <div id="intakeForm">
+        <div class="intake-sources">
+          <label class="intake-source"><strong>FIR &amp; Police Reports</strong><span>.pdf, .docx</span><input type="file" accept=".pdf,.docx"></label>
+          <label class="intake-source"><strong>Call Detail Records / CDRs</strong><span>.csv</span><input type="file" accept=".csv"></label>
+          <label class="intake-source"><strong>Financial Transaction Ledgers</strong><span>.xlsx, .csv</span><input type="file" accept=".xlsx,.csv"></label>
+          <label class="intake-source"><strong>Geolocation / IP Logs</strong><span>.json, .txt</span><input type="file" accept=".json,.txt"></label>
+        </div>
+        <button id="initializeFusion" type="button">[ ⚡ INITIALIZE FRAUDWALL AI FUSION ]</button>
+      </div>
+      <div id="fusionTerminal" aria-live="polite"></div>
+      <div class="fusion-progress"><span id="fusionProgressBar"></span></div>
+      <p id="fusionPercent">0%</p>
+    </div>
+    <footer class="copyright-banner">© 2026 Team FraudWall. All Rights Reserved. Smart India Hackathon 2026 Official Prototype.</footer>
+  </section>
+
+  <div id="dashboardView" class="is-hidden">
+
+  <nav id="topNav">
+    <div>
+      <p class="eyebrow">Organized Crime Bureau / Active File</p>
+      <h1>FraudWall | SIH 2026</h1>
+      <p class="brand-credit">Intelligence Prototype / Lead Architect: Naman Singh Baghel</p>
+    </div>
+    <div class="topbar-right">
+      <button id="ingest-button" class="ingest-button" type="button">[ + ] Ingest Data Sources</button>
+      <button id="briefing-button" class="briefing-button" type="button">[ 🖨️ ] Export Intel Briefing</button>
+      <button id="tether-button" class="tether-button" type="button">Tether Tool: Draw Manual Link</button>
+      <button id="save-links" class="save-button" type="button">Save Generated Links</button>
+      <span id="collapse-counter" class="collapse-counter">Syndicate Collapse: <strong>0</strong> connections severed</span>
+      <label class="noise-toggle">
+        <input id="civilian-filter" type="checkbox" checked>
+        <span>Filter Civilian Noise (81)</span>
+      </label>
+    </div>
+  </nav>
+
+  <div id="aiTicker" role="status" aria-live="polite">[AI ALERT] Temporal correlation detected between cell tower handoff and 4.8 BTC offshore ledger entry.</div>
+
+  <div id="boardContainer" style="width: 100vw; height: 100vh; overflow: hidden; position: relative;" aria-label="Criminal network corkboard">
+      <div id="zoomableCanvas" style="width: 3000px; height: 3000px; position: relative; transform-origin: 0 0;"></div>
+  </div>
+
+  <div id="drawer-backdrop" class="drawer-backdrop"></div>
+  <div id="ingest-backdrop" class="modal-backdrop" aria-hidden="true">
+    <section class="ingest-modal" role="dialog" aria-modal="true" aria-labelledby="ingest-title">
+      <p class="modal-kicker">Secure Intake Channel / Evidence Processing</p>
+      <h2 id="ingest-title">Data Source Ingestion</h2>
+      <div class="source-list">
+        <label class="source-row"><span><input class="source-check" type="checkbox" checked> FIR_Database.pdf</span><span class="source-status">READY</span></label>
+        <label class="source-row"><span><input class="source-check" type="checkbox" checked> CDR_Logs.csv</span><span class="source-status">READY</span></label>
+        <label class="source-row"><span><input class="source-check" type="checkbox" checked> Financial_Ledger.xlsx</span><span class="source-status">READY</span></label>
+      </div>
+      <div id="ingestTerminal">[WAIT] Awaiting analyst authorization...</div>
+      <div class="modal-actions">
+        <button id="execute-ingestion" class="execute-button" type="button">Execute AI Ingestion</button>
+        <button id="close-ingestion" class="close-modal" type="button">Close</button>
+      </div>
+    </section>
+  </div>
+  <aside id="dossierDrawer" class="dossier" aria-labelledby="dossier-title" aria-hidden="true">
+    <button id="drawer-close" class="drawer-close" type="button" aria-label="Close dossier">&times;</button>
+    <p class="dossier-kicker">Tactical Dossier</p>
+    <h2 id="dossier-title">Select a suspect</h2>
+    <div class="threat-score"><span>Calculated threat score</span><strong id="threat-score-value">--</strong></div>
+    <button id="upload-button" class="upload-button" type="button">[ + ] Upload Target Photo (Crime Branch DB)</button>
+    <dl class="dossier-grid">
+      <div><dt>ID</dt><dd id="detail-id">--</dd></div>
+      <div><dt>Name</dt><dd id="detail-name">--</dd></div>
+      <div><dt>Alias</dt><dd id="detail-alias">--</dd></div>
+      <div><dt>Role</dt><dd id="detail-role">--</dd></div>
+      <div><dt>IP Address</dt><dd id="detail-ip">--</dd></div>
+      <div><dt>Monero / BTC Address</dt><dd id="detail-wallet">--</dd></div>
+    </dl>
+    <h3 class="evidence-title">Evidentiary Justification</h3>
+    <ul class="evidence-list">
+      <li>High-volume encrypted traffic intercepted.</li>
+      <li>Financial ties to flagged offshore accounts.</li>
+    </ul>
+    <section class="proof-panel">
+      <h3>Cross-Source Intelligence Proofs</h3>
+      <div class="proof-item proof-cdr"><strong>Data #32 Match:</strong> Phone number +91-9810XXXXXX matches telemetry recovered from suspect Michelle (CDR Log ID #402).</div>
+      <div class="proof-item proof-ledger"><strong>Ledger Link #14:</strong> Offshore crypto transfer of 4.8 BTC traced directly to proxy wallet endpoint.</div>
+    </section>
+    <button id="arrest-button" class="arrest-button" type="button">Simulate Arrest</button>
+  </aside>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <footer class="copyright-banner">© 2026 Team FraudWall. All Rights Reserved. Smart India Hackathon 2026 Official Prototype.</footer>
+
+  </div>
+
+  <script>
+    const zoomableCanvas = document.getElementById('zoomableCanvas');
+    const boardContainer = document.getElementById('boardContainer');
+    const matrixCanvas = document.getElementById('matrixCanvas');
+    const civilianFilter = document.getElementById('civilian-filter');
+    const collapseCounter = document.querySelector('#collapse-counter strong');
+    const toast = document.getElementById('toast');
+    const dossier = document.getElementById('dossierDrawer');
+    const dossierBackdrop = document.getElementById('drawer-backdrop');
+    const lineRecords = [];
+    const nodeElements = new Map();
+    let caseData = { nodes: [], edges: [] };
+    let selectedNodeId = null;
+    let severedConnections = 0;
+    let toastTimer;
+    let drawTimer;
+    let isTetherMode = false;
+    let tetherStart = null;
+    let panzoomInstance;
+    let pz;
+
+    window.activeLines = [];
+
+    function beginFusion() {
+      const intakeForm = document.getElementById('intakeForm');
+      const terminal = document.getElementById('fusionTerminal');
+      const progressBar = document.getElementById('fusionProgressBar');
+      const percent = document.getElementById('fusionPercent');
+      const intakeView = document.getElementById('intakeView');
+      const dashboardView = document.getElementById('dashboardView');
+      const logs = [
+        '[FRAUDWALL CORE] Initializing secure socket and zero-knowledge enclave...',
+        '[PARSE] Extracting entities and IMEI metadata from FIR_Database.pdf...',
+        '[ANALYZE] Processing 45,000+ rows of CDR_Logs.csv...',
+        '[RESOLVE] Cross-referencing bank ledgers and cell tower handoffs...',
+        '[SUCCESS] Graph generated. Transitioning to FraudWall War Room...'
+      ];
+      intakeForm.style.display = 'none';
+      terminal.classList.add('is-active');
+      terminal.textContent = '';
+      progressBar.style.width = '0%';
+      percent.textContent = '0%';
+      requestAnimationFrame(() => { progressBar.style.width = '100%'; });
+      const startedAt = performance.now();
+      let logIndex = 0;
+      const logTimer = setInterval(() => {
+        if (logIndex < logs.length) terminal.textContent += `${logs[logIndex++]}\n`;
+      }, 400);
+      const progressTimer = setInterval(() => {
+        const progress = Math.min(100, Math.round((performance.now() - startedAt) / 25));
+        percent.textContent = `${progress}%`;
+        if (progress >= 100) clearInterval(progressTimer);
+      }, 50);
+      setTimeout(() => {
+        clearInterval(logTimer);
+        terminal.textContent = logs.join('\n');
+        percent.textContent = '100%';
+        intakeView.classList.add('is-hidden');
+        dashboardView.classList.remove('is-hidden');
+        showToast('Secure fusion complete. Command center online.');
+      }, 2500);
+    }
+
+    function startMatrixBackground() {
+      const context = matrixCanvas.getContext('2d');
+      const glyphs = ['FETCHING_IP...', 'DECRYPTING_WALLET', 'SIGINT_INTERCEPT', 'MATCH_FOUND_8492', 'SYNDICATE_DATA'];
+      let columns = [];
+      let fontSize = 13;
+
+      function resize() {
+        const ratio = window.devicePixelRatio || 1;
+        matrixCanvas.width = Math.floor(window.innerWidth * ratio);
+        matrixCanvas.height = Math.floor(window.innerHeight * ratio);
+        matrixCanvas.style.width = `${window.innerWidth}px`;
+        matrixCanvas.style.height = `${window.innerHeight}px`;
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        columns = Array.from({ length: Math.ceil(window.innerWidth / fontSize) }, () => Math.random() * window.innerHeight / fontSize);
+      }
+
+      function draw() {
+        context.fillStyle = 'rgba(5, 5, 5, .12)';
+        context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+        context.fillStyle = 'rgba(35, 255, 122, .22)';
+        context.font = `${fontSize}px Courier New`;
+        columns.forEach((y, index) => {
+          const glyph = glyphs[Math.floor(Math.random() * glyphs.length)];
+          context.fillText(glyph, index * fontSize, y * fontSize);
+          columns[index] = y * fontSize > window.innerHeight + 160 && Math.random() > .975 ? 0 : y + .42;
+        });
+        requestAnimationFrame(draw);
+      }
+
+      resize();
+      window.addEventListener('resize', resize);
+      draw();
+    }
+
+    function initPanzoom() {
+      if (panzoomInstance) return;
+      pz = Panzoom(zoomableCanvas, {
+        excludeClass: 'suspect-card',
+        maxScale: 3,
+        minScale: 0.2
+      });
+      panzoomInstance = pz;
+      window.pz = pz;
+      boardContainer.addEventListener('wheel', pz.zoomWithWheel);
+      pz.pan(-850, 0);
+      zoomableCanvas.addEventListener('panzoomchange', () => {
+        if (window.activeLines) window.activeLines.forEach((line) => line.position());
+      });
+    }
+
+    function showToast(message) {
+      clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.classList.add('is-visible');
+      toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 4800);
+    }
+
+    const tickerMessages = [
+      '[AI ALERT] Temporal correlation detected between cell tower handoff and 4.8 BTC offshore ledger entry.',
+      '[SIGINT] Encrypted proxy handshake intercepted on node #104.',
+      '[PATTERN] Behavioral match found across multi-source CDR records.'
+    ];
+    let tickerIndex = 0;
+    setInterval(() => {
+      tickerIndex = (tickerIndex + 1) % tickerMessages.length;
+      document.getElementById('aiTicker').textContent = tickerMessages[tickerIndex];
+    }, 4200);
+
+    let ingestionTimer;
+    function openIngestionModal() {
+      document.getElementById('ingest-backdrop').classList.add('is-open');
+      document.getElementById('ingest-backdrop').setAttribute('aria-hidden', 'false');
+    }
+
+    function closeIngestionModal() {
+      clearInterval(ingestionTimer);
+      document.getElementById('ingest-backdrop').classList.remove('is-open');
+      document.getElementById('ingest-backdrop').setAttribute('aria-hidden', 'true');
+    }
+
+    function executeIngestion() {
+      const terminal = document.getElementById('ingestTerminal');
+      const selected = [...document.querySelectorAll('.source-check:checked')].length;
+      const logs = [
+        '[INIT] Parsing unstructured FIR text...',
+        '[EXTRACT] Isolating IMEI, Phone, and IP entities...',
+        '[RESOLVE] Merging entity nodes and calculating confidence weights...',
+        `[INDEX] ${selected} authorized evidence sources committed to the case vault...`,
+        '[SUCCESS] Network graph updated with 3 new intelligence clusters.'
+      ];
+      terminal.textContent = '';
+      let index = 0;
+      clearInterval(ingestionTimer);
+      ingestionTimer = setInterval(() => {
+        terminal.textContent += `${logs[index]}\n`;
+        terminal.scrollTop = terminal.scrollHeight;
+        index += 1;
+        if (index >= logs.length) {
+          clearInterval(ingestionTimer);
+          showToast('AI ingestion complete. Intelligence clusters indexed.');
+        }
+      }, 620);
+    }
+
+    function exportIntelBriefing() {
+      const timestamp = new Date().toISOString();
+      const cryptographicStamp = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const syndicate = caseData.nodes.filter((node) => node.role !== 'Civilian');
+      const connectionCounts = new Map(syndicate.map((node) => [node.id, 0]));
+      caseData.edges.forEach((edge) => {
+        if (connectionCounts.has(edge.source)) connectionCounts.set(edge.source, connectionCounts.get(edge.source) + 1);
+        if (connectionCounts.has(edge.target)) connectionCounts.set(edge.target, connectionCounts.get(edge.target) + 1);
+      });
+      const lines = [
+        'ORGANIZED CRIME BUREAU / ACTIVE FILE',
+        'OPERATION BLACKBIRD // COURT-READY INTEL BRIEFING',
+        '================================================',
+        `Generated UTC: ${timestamp}`,
+        `Cryptographic Record Stamp: ${cryptographicStamp}`,
+        'Case: 042-B',
+        `Active graph connections: ${caseData.edges.length}`,
+        `Active syndicate nodes: ${syndicate.length}`,
+        '',
+        'REMAINING SYNDICATE TARGETS',
+        '---------------------------',
+        ...syndicate.map((node) => `${node.id} | ${node.name} | ${node.role} | Threat ${threatScore(node)}/100 | Active connections ${connectionCounts.get(node.id)}`),
+        '',
+        'EVIDENTIARY JUSTIFICATION AUDIT TRAIL',
+        '--------------------------------------',
+        '[VERIFIED] High-volume encrypted traffic intercepted.',
+        '[VERIFIED] Financial ties to flagged offshore accounts.',
+        '[VERIFIED] Cross-source entity resolution completed against FIR, CDR, and ledger evidence.',
+        '[CHAIN] Export generated from the live Operation Blackbird network state.',
+        '',
+        'END OF BRIEFING'
+      ];
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'Operation_Blackbird_Briefing.txt';
+      link.click();
+      URL.revokeObjectURL(link.href);
+      showToast('Court-ready intel briefing exported.');
+    }
+
+    function roleClass(role) {
+      return `role-${role.toLowerCase().replace(/\s+/g, '-')}`;
+    }
+
+    function rolePresentation(role) {
+      if (role === 'Kingpin') return { label: 'MASTERMIND', color: '#ff003c' };
+      if (role === 'Lieutenant') return { label: 'IDENTIFIED SUSPECT', color: '#ff7700' };
+      if (role === 'Money Mule') return { label: 'MONEY MULE', color: '#ffd000' };
+      return { label: role.toUpperCase(), color: '#0ff' };
+    }
+
+    function initials(name) {
+      return name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+    }
+
+    function threatScore(node) {
+      const base = { Kingpin: 98, Lieutenant: 78, 'Money Mule': 42, Civilian: 8 };
+      return Math.min(100, base[node.role] + (node.id.charCodeAt(node.id.length - 1) % 7));
+    }
+
+    function positionFor(node, index, syndicateNodes) {
+      if (node.role === 'Kingpin') return { x: 1462, y: 180 };
+      const lieutenants = syndicateNodes.filter((item) => item.role === 'Lieutenant');
+      if (node.role === 'Lieutenant') {
+        const lieutenantIndex = lieutenants.findIndex((item) => item.id === node.id);
+        return { x: [950, 1462, 1974][lieutenantIndex], y: 480 };
+      }
+      if (node.role === 'Money Mule') {
+        const mules = syndicateNodes.filter((item) => item.role === 'Money Mule');
+        const muleIndex = mules.findIndex((item) => item.id === node.id);
+        const row = Math.floor(muleIndex / 5);
+        const rowIndex = muleIndex % 5;
+        return { x: 750 + rowIndex * 356, y: [800, 1060, 1320][row] || 1320 };
+      }
+      const civilians = caseData.nodes.filter((item) => item.role === 'Civilian');
+      const civilianIndex = civilians.findIndex((item) => item.id === node.id);
+      const civilianColumn = civilianIndex % 10;
+      const civilianRow = Math.floor(civilianIndex / 10);
+      return { x: 80 + civilianColumn * 145, y: 1220 + civilianRow * 145 };
+    }
+
+    function makePolaroidMarkup(node, index, visibleNodes) {
+      const position = positionFor(node, index, visibleNodes);
+      const presentation = rolePresentation(node.role);
+      return `
+        <article id="node-${node.id}" class="suspect-card ${roleClass(node.role)}" style="left: ${position.x}px; top: ${position.y}px" data-node-id="${node.id}" role="button" tabindex="0" aria-label="Open dossier for ${node.name}">
+          <img class="suspect-photo" src="https://i.pravatar.cc/200?u=${node.id}" alt="Surveillance profile for ${node.name}" style="width: 100%; height: 110px; object-fit: cover; border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom: 1px solid rgba(255,255,255,0.2);">
+          <div style="padding: 8px; text-align: center;">
+            <div style="color: #ffffff; font-size: 12px; font-weight: bold; margin-bottom: 4px;">${node.name}</div>
+            <div style="color: ${presentation.color}; font-size: 10px; font-weight: 900; letter-spacing: 0.5px;">${presentation.label}</div>
+          </div>
+        </article>`;
+    }
+
+    function injectNodes(visibleNodes) {
+      removeLines();
+      nodeElements.clear();
+      zoomableCanvas.innerHTML = visibleNodes.map((node, index) => makePolaroidMarkup(node, index, visibleNodes)).join('');
+      visibleNodes.forEach((node) => nodeElements.set(node.id, document.getElementById(`node-${node.id}`)));
+      document.querySelectorAll('.suspect-card').forEach((card) => {
+        const node = caseData.nodes.find((item) => item.id === card.dataset.nodeId);
+        card.addEventListener('click', () => {
+          if (card.dataset.dragged === 'true') {
+            card.dataset.dragged = 'false';
+            return;
+          }
+          if (isTetherMode) {
+            if (!tetherStart) {
+              tetherStart = card;
+              card.classList.add('tether-selected');
+              showToast('Tether source acquired. Select a second node.');
+              return;
+            }
+            if (tetherStart === card) return;
+            const manualLine = new LeaderLine(tetherStart, card, {
+              color: '#00ffff',
+              size: 3,
+              dash: { animation: true }
+            });
+            window.activeLines.push(manualLine);
+            lineRecords.push({ edge: { source: tetherStart.dataset.nodeId, target: card.dataset.nodeId }, line: manualLine, manual: true });
+            tetherStart.classList.remove('tether-selected');
+            tetherStart = null;
+            showToast('Manual cyan tether established.');
+            return;
+          }
+          openDossier(node);
+        });
+        card.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openDossier(node);
+          }
+        });
+      });
+    }
+
+    function removeLines() {
+      lineRecords.splice(0).forEach((record) => record.line.remove());
+      window.activeLines.length = 0;
+    }
+
+    function drawConnections(data) {
+      removeLines();
+      clearTimeout(drawTimer);
+      drawTimer = setTimeout(() => {
+        window.activeLines = [];
+        data.edges.forEach(edge => {
+          const startEl = document.getElementById(`node-${edge.source}`);
+          const endEl = document.getElementById(`node-${edge.target}`);
+          if (startEl && endEl) {
+            const line = new LeaderLine(startEl, endEl, {
+              color: 'rgba(255, 30, 70, 0.65)',
+              size: 2.2,
+              path: 'fluid'
+            });
+            window.activeLines.push(line);
+            lineRecords.push({ edge, line });
+          }
+        });
+      }, 600);
+    }
+
+    document.addEventListener('click', (e) => {
+      if (e.target.tagName.toLowerCase() === 'path' && e.target.closest('.leader-line')) {
+        const action = prompt("Link Options: Type 'delete' to remove, or enter a hex color (e.g., #00ffff):");
+        if (action && action.toLowerCase() === 'delete') {
+          e.target.closest('.leader-line').remove();
+        }
+        if (action && /^#[0-9a-f]{3,8}$/i.test(action.trim())) {
+          const lineIndex = [...document.querySelectorAll('body > .leader-line')].indexOf(e.target.closest('.leader-line'));
+          if (window.activeLines[lineIndex]) window.activeLines[lineIndex].setOptions({ color: action.trim() });
+        }
+      }
+    });
+
+    let dragged = null, startX, startY, initLeft, initTop;
+    document.addEventListener('pointerdown', e => {
+      dragged = e.target.closest('.suspect-card');
+      if (!dragged) return;
+      e.stopPropagation();
+      const scale = pz.getScale();
+      startX = e.clientX;
+      startY = e.clientY;
+      initLeft = parseFloat(dragged.style.left) || 0;
+      initTop = parseFloat(dragged.style.top) || 0;
+      try { dragged.setPointerCapture(e.pointerId); } catch (error) {}
+      dragged.classList.add('is-dragging');
+    }, true);
+    document.addEventListener('pointermove', e => {
+      if (!dragged) return;
+      const scale = pz.getScale();
+      dragged.style.left = `${initLeft + (e.clientX - startX) / scale}px`;
+      dragged.style.top = `${initTop + (e.clientY - startY) / scale}px`;
+      if (window.activeLines) window.activeLines.forEach(l => { try { l.position(); } catch(err){} });
+    }, true);
+    document.addEventListener('pointerup', () => {
+      if (dragged) dragged.classList.remove('is-dragging');
+      dragged = null;
+    }, true);
+
+    function renderBoard() {
+      const showCivilians = !civilianFilter.checked;
+      const visibleNodes = caseData.nodes.filter((node) => showCivilians || node.role !== 'Civilian');
+      injectNodes(visibleNodes);
+      drawConnections(caseData);
+    }
+
+    function openDossier(node) {
+      selectedNodeId = node.id;
+      document.getElementById('dossier-title').textContent = node.name;
+      document.getElementById('threat-score-value').textContent = threatScore(node);
+      document.getElementById('detail-id').textContent = node.id;
+      document.getElementById('detail-name').textContent = node.name;
+      document.getElementById('detail-alias').textContent = node.alias || `${node.name.split(' ')[0]}_${node.id.slice(-3)}`;
+      document.getElementById('detail-role').textContent = node.role;
+      document.getElementById('detail-ip').textContent = node.ip_address;
+      document.getElementById('detail-wallet').textContent = node.crypto_wallet;
+      dossier.classList.add('is-open');
+      dossierBackdrop.classList.add('is-open');
+      dossier.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeDossier() {
+      dossier.classList.remove('is-open');
+      dossierBackdrop.classList.remove('is-open');
+      dossier.setAttribute('aria-hidden', 'true');
+      selectedNodeId = null;
+    }
+
+    function simulateArrest() {
+      if (!selectedNodeId) return;
+      const nodeId = selectedNodeId;
+      const card = nodeElements.get(nodeId);
+      if (!card) return;
+      const attachedRecords = lineRecords.filter((record) => record.edge.source === nodeId || record.edge.target === nodeId);
+      attachedRecords.forEach((record) => {
+        record.line.remove();
+        const recordIndex = lineRecords.indexOf(record);
+        if (recordIndex >= 0) lineRecords.splice(recordIndex, 1);
+      });
+      caseData.nodes = caseData.nodes.filter((node) => node.id !== nodeId);
+      caseData.edges = caseData.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId);
+      severedConnections += attachedRecords.length;
+      collapseCounter.textContent = severedConnections;
+      card.classList.add('is-arrested');
+      document.getElementById('arrest-button').disabled = true;
+      setTimeout(() => {
+        card.remove();
+        nodeElements.delete(nodeId);
+        closeDossier();
+      }, 320);
+    }
+
+    function loadCaseData() {
+      fetch('./case_data.json')
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then((data) => {
+          if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw new Error('Invalid case data shape');
+        caseData = data;
+        const showCivilians = !civilianFilter.checked;
+        const visibleNodes = data.nodes.filter((node) => showCivilians || node.role !== 'Civilian');
+        injectNodes(visibleNodes);
+        initPanzoom();
+        startMatrixBackground();
+        drawConnections(data);
+        })
+        .catch((error) => {
+        console.error('Unable to load case data:', error);
+        showToast('Case data unavailable. The board remains available, but no suspects were loaded.');
+        });
+    }
+
+    civilianFilter.addEventListener('change', renderBoard);
+    document.getElementById('ingest-button').addEventListener('click', openIngestionModal);
+    document.getElementById('execute-ingestion').addEventListener('click', executeIngestion);
+    document.getElementById('close-ingestion').addEventListener('click', closeIngestionModal);
+    document.getElementById('ingest-backdrop').addEventListener('click', (event) => {
+      if (event.target.id === 'ingest-backdrop') closeIngestionModal();
+    });
+    document.getElementById('briefing-button').addEventListener('click', exportIntelBriefing);
+    document.getElementById('tether-button').addEventListener('click', (event) => {
+      isTetherMode = !isTetherMode;
+      if (!isTetherMode && tetherStart) {
+        tetherStart.classList.remove('tether-selected');
+        tetherStart = null;
+      }
+      event.currentTarget.classList.toggle('is-active', isTetherMode);
+      showToast(isTetherMode ? 'Tether mode active. Select Node A, then Node B.' : 'Tether mode offline.');
+    });
+    document.getElementById('save-links').addEventListener('click', () => {
+      const links = lineRecords.map((record) => record.edge);
+      const blob = new Blob([JSON.stringify(links, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'generated-links.json';
+      link.click();
+      URL.revokeObjectURL(link.href);
+      showToast(`${links.length} generated links exported.`);
+    });
+    document.getElementById('drawer-close').addEventListener('click', closeDossier);
+    document.getElementById('arrest-button').addEventListener('click', simulateArrest);
+    document.getElementById('upload-button').addEventListener('click', () => {
+      showToast('Crime Branch DB update channel is ready for target media.');
+    });
+    document.getElementById('initializeFusion').addEventListener('click', beginFusion);
+    dossierBackdrop.addEventListener('click', closeDossier);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeDossier();
+    });
+    window.addEventListener('resize', () => lineRecords.forEach((record) => record.line.position()));
+    loadCaseData();
+  </script>
+</body>
+</html>
