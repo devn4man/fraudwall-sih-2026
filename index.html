@@ -2,8 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FraudWall | SIH 2026 Intelligence Prototype</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">  <title>FraudWall | SIH 2026 Intelligence Prototype</title>
   <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leader-line/1.0.7/leader-line.min.js"></script>
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
@@ -771,8 +770,10 @@
     </ul>
     <section class="proof-panel">
       <h3>Cross-Source Intelligence Proofs</h3>
-      <div class="proof-item proof-cdr"><strong>Data #32 Match:</strong> Phone number +91-9810XXXXXX matches telemetry recovered from suspect Michelle (CDR Log ID #402).</div>
-      <div class="proof-item proof-ledger"><strong>Ledger Link #14:</strong> Offshore crypto transfer of 4.8 BTC traced directly to proxy wallet endpoint.</div>
+      <div id="proof-list">
+        <div class="proof-item proof-cdr"><strong>Data #32 Match:</strong> Phone number +91-9810XXXXXX matches telemetry recovered from suspect Michelle (CDR Log ID #402).</div>
+        <div class="proof-item proof-ledger"><strong>Ledger Link #14:</strong> Offshore crypto transfer of 4.8 BTC traced directly to proxy wallet endpoint.</div>
+      </div>
     </section>
     <button id="arrest-button" class="arrest-button" type="button">Simulate Arrest</button>
   </aside>
@@ -806,17 +807,81 @@
 
     window.activeLines = [];
 
-    function beginFusion() {
+    function readIntelligenceFile(file) {
+      return new Promise((resolve) => {
+        if (!file) return resolve({ name: '', content: '' });
+        const reader = new FileReader();
+        reader.onload = () => resolve({ name: file.name, content: String(reader.result || '') });
+        reader.onerror = () => resolve({ name: file.name, content: '' });
+        reader.readAsText(file);
+      });
+    }
+
+    function proofForNode(node, sources) {
+      const sourceNames = sources.map((source) => source.name).filter(Boolean);
+      const cdr = sourceNames.find((name) => /cdr/i.test(name)) || 'CDR_Logs.csv';
+      const ledger = sourceNames.find((name) => /ledger|financial/i.test(name)) || 'Financial_Ledger.xlsx';
+      const fir = sourceNames.find((name) => /fir|police/i.test(name)) || 'FIR_Database.pdf';
+      return [
+        `CDR Log #402 (${cdr}): IMEI and phone telemetry match the ${node.name} entity cluster.`,
+        `Financial Ledger #14 (${ledger}): 4.8 BTC transfer traces to the linked offshore proxy endpoint.`,
+        `FIR Report #09 (${fir}): Witness placement and transit-hub activity align with the verified profile.`
+      ];
+    }
+
+    function createMockFusionData() {
+      const names = ['Allison Hill', 'Michelle Miles', 'Renee Blair', 'Victoria Wyatt', 'Danielle Ford', 'Maria Thomas', 'Ann Williams', 'Ashley Dyer', 'Paula Moreno', 'John Jones', 'Joseph Martinez', 'Taylor Heath', 'Brent Jordan', 'Thomas Ramos', 'Carmen Smith', 'Sarah Moore', 'Christina Moran', 'Brandi Bailey', 'Brandy Wilson'];
+      const roles = ['Kingpin', 'Lieutenant', 'Lieutenant', 'Lieutenant', ...Array(15).fill('Money Mule')];
+      const nodes = names.map((name, index) => ({
+        id: `node-${String(index + 1).padStart(3, '0')}`,
+        name,
+        phone_number: '+91-9810XXXXXX',
+        ip_address: '185.220.101.5',
+        crypto_wallet: '0x89ab...4f21',
+        role: roles[index]
+      }));
+      const edges = [
+        { source: 'node-001', target: 'node-002' },
+        { source: 'node-001', target: 'node-003' },
+        { source: 'node-001', target: 'node-004' }
+      ];
+      for (let index = 5; index <= 19; index += 1) {
+        edges.push({ source: `node-${String(2 + ((index - 5) % 3)).padStart(3, '0')}`, target: `node-${String(index).padStart(3, '0')}` });
+      }
+      return { nodes, edges };
+    }
+
+    async function ingestFusionData() {
+      const files = [...document.querySelectorAll('#intakeForm input[type="file"]')].map((input) => input.files[0]).filter(Boolean);
+      const sources = await Promise.all(files.map(readIntelligenceFile));
+      const sourceText = sources.map((source) => source.content).join('\n').toLowerCase();
+      const baseData = caseData.nodes.length ? caseData : createMockFusionData();
+      const baseNodes = baseData.nodes;
+      const nodes = baseNodes.map((node) => ({
+        ...node,
+        designation: rolePresentation(node.role).label,
+        threat: node.role === 'Kingpin' ? 'red' : node.role === 'Lieutenant' ? 'orange' : 'yellow',
+        proofs: proofForNode(node, sources.length ? sources : [{ name: 'Built-in FraudWall Mock Dataset', content: sourceText }])
+      }));
+      return { nodes, edges: baseData.edges.slice(), sources, sourceText };
+    }
+
+    async function beginFusion() {
+      const ingestedData = await ingestFusionData();
+      caseData = ingestedData;
       const intakeForm = document.getElementById('intakeForm');
       const terminal = document.getElementById('fusionTerminal');
       const progressBar = document.getElementById('fusionProgressBar');
       const percent = document.getElementById('fusionPercent');
       const intakeView = document.getElementById('intakeView');
       const dashboardView = document.getElementById('dashboardView');
+      const filenames = ingestedData.sources.map((source) => source.name).filter(Boolean);
+      const firName = filenames.find((name) => /fir|police/i.test(name)) || 'FIR_Database.pdf';
+      const cdrName = filenames.find((name) => /cdr/i.test(name)) || 'CDR_Logs.csv';
       const logs = [
         '[FRAUDWALL CORE] Initializing secure socket and zero-knowledge enclave...',
-        '[PARSE] Extracting entities and IMEI metadata from FIR_Database.pdf...',
-        '[ANALYZE] Processing 45,000+ rows of CDR_Logs.csv...',
+        `[PARSE] Extracting entities and IMEI metadata from ${firName}...`,
+        `[ANALYZE] Processing 45,000+ rows of ${cdrName}...`,
         '[RESOLVE] Cross-referencing bank ledgers and cell tower handoffs...',
         '[SUCCESS] Graph generated. Transitioning to FraudWall War Room...'
       ];
@@ -842,6 +907,7 @@
         percent.textContent = '100%';
         intakeView.classList.add('is-hidden');
         dashboardView.classList.remove('is-hidden');
+        renderBoard();
         showToast('Secure fusion complete. Command center online.');
       }, 2500);
     }
@@ -1169,6 +1235,14 @@
       document.getElementById('detail-role').textContent = node.role;
       document.getElementById('detail-ip').textContent = node.ip_address;
       document.getElementById('detail-wallet').textContent = node.crypto_wallet;
+      const proofList = document.getElementById('proof-list');
+      proofList.replaceChildren();
+      (node.proofs || proofForNode(node, [{ name: 'Built-in FraudWall Mock Dataset', content: '' }])).forEach((proof, index) => {
+        const item = document.createElement('div');
+        item.className = `proof-item ${index === 1 ? 'proof-ledger' : 'proof-cdr'}`;
+        item.textContent = proof;
+        proofList.appendChild(item);
+      });
       dossier.classList.add('is-open');
       dossierBackdrop.classList.add('is-open');
       dossier.setAttribute('aria-hidden', 'false');
